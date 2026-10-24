@@ -29,6 +29,7 @@ def case_files(root):
 
 
 def generate(prompt: str, output: Path) -> None:
+    output = output.resolve()
     if output.exists() and any(output.iterdir()):
         raise FileExistsError(f"Program generation needs an empty directory: {output}")
     output.mkdir(parents=True, exist_ok=True)
@@ -59,18 +60,17 @@ def generate(prompt: str, output: Path) -> None:
     (output / "TASK.md").write_text(task, encoding="utf-8")
     locked = {str(p.relative_to(output)): digest(p) for p in
               (output / "AGENTS.md", output / "TASK.md", agents / "video-prompt-threejs.agent.md")}
+    opencode = shutil.which("opencode") or str(Path.home() / ".opencode/bin/opencode")
     subprocess.run([
-        "copilot", "-C", str(output), "--model", PROGRAM_MODEL,
-        "--agent", "video-prompt-threejs",
-        "--reasoning-effort", "xhigh", "--allow-all-tools", "--no-ask-user",
-        "--no-remote", "--no-remote-export", "--autopilot", "--prompt",
+        opencode, "run", "--standalone", "--auto",
+        "--agent", "build", "--model", f"openai/{PROGRAM_MODEL}#xhigh",
         f"Read {output / 'AGENTS.md'} and {output / 'TASK.md'}. "
         "Complete only this isolated prompt-to-Three.js task as one "
-        "uninterrupted /goal session. No reference video exists. Build, "
+        "uninterrupted autonomous session. No reference video exists. Build, "
         "render, directly inspect generated keyframes/contact sheets against "
         "the prompt, refine, and deliver the fresh Candidate without waiting "
         "for user feedback.",
-    ], check=True)
+    ], cwd=output, check=True)
     for name, sha in locked.items():
         if digest(output / name) != sha:
             raise ValueError(f"The agent changed its instructions: {name}")
